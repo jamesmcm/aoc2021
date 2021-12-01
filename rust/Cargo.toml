@@ -1,0 +1,12 @@
+[package]
+name = "aoc2021_rust"
+version = "0.1.0"
+authors = ["James McMurray <jmcmurray@spotify.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+aoc-runner = "0.3"
+aoc-runner-derive = "0.3"
