@@ -20,10 +20,10 @@ pub struct Sigil {
     pub state: State,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Validation {
     Valid,
-    Incomplete,
+    Incomplete(Vec<Sigil>),
     Corrupt(Sigil),
 }
 
@@ -103,7 +103,7 @@ pub fn validate(line: &[Sigil]) -> Validation {
     if stack.is_empty() {
         Validation::Valid
     } else {
-        Validation::Incomplete
+        Validation::Incomplete(stack.clone())
     }
 }
 
@@ -117,31 +117,60 @@ pub fn solve_part1(input: &Vec<Vec<Sigil>>) -> usize {
                 bracket: Bracket::Normal,
                 state: State::Close,
             }) => {
-                output += 1;
+                output += 3;
             }
             Validation::Corrupt(Sigil {
                 bracket: Bracket::Square,
                 state: State::Close,
             }) => {
-                output += 2;
+                output += 57;
             }
             Validation::Corrupt(Sigil {
                 bracket: Bracket::Curly,
                 state: State::Close,
             }) => {
-                output += 3;
+                output += 1197;
             }
             Validation::Corrupt(Sigil {
                 bracket: Bracket::Angle,
                 state: State::Close,
             }) => {
-                output += 4;
+                output += 25137;
             }
             _ => {}
         }
     }
 
     output
+}
+
+#[aoc(day10, part2)]
+pub fn solve_part2(input: &Vec<Vec<Sigil>>) -> usize {
+    let mut scores: Vec<usize> = input
+        .iter()
+        .filter_map(|l| match validate(l) {
+            Validation::Incomplete(x) => Some(x),
+            _ => None,
+        })
+        .map(|l| {
+            let mut val = 0;
+            let mut l_backward = l.clone();
+            l_backward.reverse();
+            for c in l_backward {
+                val *= 5;
+                val += match c.bracket {
+                    Bracket::Normal => 1,
+                    Bracket::Square => 2,
+                    Bracket::Curly => 3,
+                    Bracket::Angle => 4,
+                };
+            }
+            val
+        })
+        .collect::<Vec<usize>>();
+    scores.sort();
+    dbg!(&scores);
+    scores[scores.len() / 2]
 }
 
 #[cfg(test)]
@@ -158,7 +187,13 @@ mod tests {
     fn test_basic2() {
         let inp = "(()";
         let parsed = input_generator(inp);
-        assert_eq!(validate(&parsed[0]), Validation::Incomplete);
+        assert_eq!(
+            validate(&parsed[0]),
+            Validation::Incomplete(vec![Sigil {
+                bracket: Bracket::Normal,
+                state: State::Open
+            }])
+        );
     }
     #[test]
     fn test_basic3() {
@@ -218,6 +253,42 @@ mod tests {
     fn test_basic8() {
         let inp = "(([{(({[[]]}))}]))(";
         let parsed = input_generator(inp);
-        assert_eq!(validate(&parsed[0]), Validation::Incomplete);
+        assert_eq!(
+            validate(&parsed[0]),
+            Validation::Incomplete(vec![Sigil {
+                bracket: Bracket::Normal,
+                state: State::Open
+            }])
+        );
+    }
+    #[test]
+    fn test_1() {
+        let inp = "[({(<(())[]>[[{[]{<()<>>
+[(()[<>])]({[<{<<[]>>(
+{([(<{}[<>[]}>{[]{[(<()>
+(((({<>}<{<{<>}{[]{[]{}
+[[<[([]))<([[{}[[()]]]
+[{[{({}]{}}([{[{{{}}([]
+{<[[]]>}<{[{[{[]{()[[[]
+[<(<(<(<{}))><([]([]()
+<{([([[(<>()){}]>(<<{{
+<{([{{}}[<[[[<>{}]]]>[]]";
+        let parsed = input_generator(inp);
+        assert_eq!(solve_part1(&parsed), 26397);
+    }
+    #[test]
+    fn test_2() {
+        let inp = "[({(<(())[]>[[{[]{<()<>>
+[(()[<>])]({[<{<<[]>>(
+{([(<{}[<>[]}>{[]{[(<()>
+(((({<>}<{<{<>}{[]{[]{}
+[[<[([]))<([[{}[[()]]]
+[{[{({}]{}}([{[{{{}}([]
+{<[[]]>}<{[{[{[]{()[[[]
+[<(<(<(<{}))><([]([]()
+<{([([[(<>()){}]>(<<{{
+<{([{{}}[<[[[<>{}]]]>[]]";
+        let parsed = input_generator(inp);
+        assert_eq!(solve_part2(&parsed), 288957);
     }
 }
