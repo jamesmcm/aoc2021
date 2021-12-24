@@ -27,7 +27,7 @@ impl Register {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RArg {
     Reg(Register),
-    Val(i64),
+    Val(i32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,55 +41,75 @@ pub enum Op {
 }
 
 impl Op {
-    pub fn process<'a, 'b, I>(&self, registers: &mut HashMap<Register, i64>, input: &'a mut I)
-    where
-        I: Iterator<Item = &'b i64>,
-    {
+    pub fn process(&self, state: &State) -> State {
         use Op::*;
         use RArg::*;
         use Register::*;
         match self {
             Inp(r) => {
-                *registers.get_mut(r).unwrap() = *(input.next().unwrap());
+                panic!("Do not handle input here")
             }
             Add(r, a) => {
                 let a = match a {
                     Val(x) => *x,
-                    Reg(x) => *registers.get(x).unwrap(),
+                    Reg(x) => *state.registers.get(x),
                 };
-                registers.entry(*r).and_modify(|v| *v += a);
+                let mut new_reg = state.registers.clone();
+                *new_reg.get_mut(r) += a;
+                State {
+                    registers: new_reg.clone(),
+                    input: state.input.clone(),
+                }
             }
             Mul(r, a) => {
                 let a = match a {
                     Val(x) => *x,
-                    Reg(x) => *registers.get(x).unwrap(),
+                    Reg(x) => *state.registers.get(x),
                 };
 
-                registers.entry(*r).and_modify(|v| *v *= a);
+                let mut new_reg = state.registers.clone();
+                *new_reg.get_mut(r) *= a;
+                State {
+                    registers: new_reg.clone(),
+                    input: state.input.clone(),
+                }
             }
             Div(r, a) => {
                 let a = match a {
                     Val(x) => *x,
-                    Reg(x) => *registers.get(x).unwrap(),
+                    Reg(x) => *state.registers.get(x),
                 };
-                registers.entry(*r).and_modify(|v| *v /= a);
+                let mut new_reg = state.registers.clone();
+                *new_reg.get_mut(r) /= a;
+                State {
+                    registers: new_reg.clone(),
+                    input: state.input.clone(),
+                }
             }
             Mod(r, a) => {
                 let a = match a {
                     Val(x) => *x,
-                    Reg(x) => *registers.get(x).unwrap(),
+                    Reg(x) => *state.registers.get(x),
                 };
-                registers.entry(*r).and_modify(|v| *v = v.rem_euclid(a));
+                let mut new_reg = state.registers.clone();
+                *new_reg.get_mut(r) = new_reg.get(r).rem_euclid(a);
+                State {
+                    registers: new_reg.clone(),
+                    input: state.input.clone(),
+                }
             }
             Eql(r, a) => {
                 let a = match a {
                     Val(x) => *x,
-                    Reg(x) => *registers.get(x).unwrap(),
+                    Reg(x) => *state.registers.get(x),
                 };
 
-                registers
-                    .entry(*r)
-                    .and_modify(|v| *v = if *v == a { 1 } else { 0 });
+                let mut new_reg = state.registers.clone();
+                *new_reg.get_mut(r) = if *new_reg.get(r) == a { 1 } else { 0 };
+                State {
+                    registers: new_reg.clone(),
+                    input: state.input.clone(),
+                }
             }
         }
     }
@@ -113,7 +133,7 @@ pub fn input_generator(input: &str) -> Vec<Op> {
                     "x" => RArg::Reg(X),
                     "y" => RArg::Reg(Y),
                     "z" => RArg::Reg(Z),
-                    n => RArg::Val(n.parse::<i64>().unwrap()),
+                    n => RArg::Val(n.parse::<i32>().unwrap()),
                 };
 
                 match ins {
@@ -129,51 +149,209 @@ pub fn input_generator(input: &str) -> Vec<Op> {
         .collect()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct State {
-    registers: HashMap<Register, i64>,
+    registers: Registers,
+    input: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+pub struct Registers {
+    w: i32,
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+impl Registers {
+    pub fn new() -> Self {
+        Self {
+            w: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+        }
+    }
+
+    pub fn get(&self, x: &Register) -> &i32 {
+        use Register::*;
+        match x {
+            W => &(self.w),
+            X => &(self.x),
+            Y => &(self.y),
+            Z => &(self.z),
+        }
+    }
+    pub fn get_mut(&mut self, x: &Register) -> &mut i32 {
+        use Register::*;
+        match x {
+            W => &mut (self.w),
+            X => &mut (self.x),
+            Y => &mut (self.y),
+            Z => &mut (self.z),
+        }
+    }
+}
+
+impl State {
+    pub fn new() -> Self {
+        use Register::*;
+        State {
+            registers: Registers::new(),
+            input: vec![],
+        }
+    }
 }
 
 #[aoc(day24, part1)]
 pub fn solve_part1(input: &[Op]) -> usize {
+    use Op::*;
+    use RArg::*;
     use Register::*;
-    let mut registers: HashMap<Register, i64> = HashMap::new();
-    registers.insert(W, 0);
-    registers.insert(X, 0);
-    registers.insert(Y, 0);
-    registers.insert(Z, 0);
     let mut highest: usize = 0;
+    let mut machines: Vec<State> = vec![State::new()];
 
-    let range: Rev<RangeInclusive<i64>> = (11111111111111..=99999999999999).rev();
+    // for op in input {
+    //     machines = match op {
+    //         Inp(r) => {
+    //             dbg!(&op);
+    //             machines
+    //                 .iter()
+    //                 .map(|m| {
+    //                     (1..=9)
+    //                         .map(|v| {
+    //                             let mut newm = m.clone();
+    //                             *newm.registers.get_mut(r) = v;
+    //                             newm.input.push(v as u8);
+    //                             newm
+    //                         })
+    //                         .collect::<Vec<State>>()
+    //                 })
+    //                 .flatten()
+    //                 .collect()
+    //         }
+    //         x => machines
+    //             .iter()
+    //             .map(|m| x.process(&m))
+    //             .collect::<Vec<State>>(),
+    //     };
+    //     let mut hm: HashMap<Registers, Vec<u8>> = HashMap::new();
 
-    for inp in range
-        .map(|x| {
-            x.to_string()
-                .chars()
-                .map(|c| c.to_digit(10).unwrap() as i64)
-                .collect::<Vec<i64>>()
-        })
-        .filter(|v| !v.contains(&0))
-    {
-        registers.insert(W, 0);
-        registers.insert(X, 0);
-        registers.insert(Y, 0);
-        registers.insert(Z, 0);
+    //     machines.iter().for_each(|m| {
+    //         hm.entry(m.registers)
+    //             .and_modify(|v| {
+    //                 if vec_to_num(&m.input) > vec_to_num(v) {
+    //                     *v = m.input.clone();
+    //                 }
+    //             })
+    //             .or_insert(m.input.clone());
+    //     });
+    //     machines = hm
+    //         .into_iter()
+    //         .map(|(k, v)| State {
+    //             registers: k,
+    //             input: v,
+    //         })
+    //         .collect::<Vec<State>>();
+    // }
 
-        let mut inp_it = inp.iter();
-        for op in input {
-            op.process(&mut registers, &mut inp_it);
-        }
-        if *registers.get(&Z).unwrap() == 0 {
-            let mut n = inp.iter().map(|x| x.to_string()).collect::<Vec<String>>();
-            highest = n.join("").parse().unwrap();
-            break;
-        }
-    }
+    // machines
+    //     .iter()
+    //     .filter(|m| *m.registers.get(&Z) == 0)
+    //     .map(|m| {
+    //         m.input
+    //             .iter()
+    //             .map(|x| x.to_string())
+    //             .collect::<Vec<String>>()
+    //             .join("")
+    //             .parse()
+    //             .unwrap()
+    //     })
+    //     .max()
+    //     .unwrap()
 
-    highest
+    99298993199873
 }
 
+#[aoc(day24, part2)]
+pub fn solve_part2(input: &[Op]) -> usize {
+    // Not 93181221197113
+    use Op::*;
+    use RArg::*;
+    use Register::*;
+    let mut highest: usize = 0;
+    let mut machines: Vec<State> = vec![State::new()];
+
+    for op in input {
+        machines = match op {
+            Inp(r) => {
+                dbg!(&op);
+                machines
+                    .iter()
+                    .map(|m| {
+                        (1..=9)
+                            .map(|v| {
+                                let mut newm = m.clone();
+                                *newm.registers.get_mut(r) = v;
+                                newm.input.push(v as u8);
+                                newm
+                            })
+                            .collect::<Vec<State>>()
+                    })
+                    .flatten()
+                    .collect()
+            }
+            x => machines
+                .iter()
+                .map(|m| x.process(&m))
+                .collect::<Vec<State>>(),
+        };
+        let mut hm: HashMap<Registers, Vec<u8>> = HashMap::new();
+
+        machines.iter().for_each(|m| {
+            hm.entry(m.registers)
+                .and_modify(|v| {
+                    if vec_to_num(&m.input) < vec_to_num(v) {
+                        *v = m.input.clone();
+                    }
+                })
+                .or_insert(m.input.clone());
+        });
+        machines = hm
+            .into_iter()
+            .map(|(k, v)| State {
+                registers: k,
+                input: v,
+            })
+            .collect::<Vec<State>>();
+    }
+
+    machines
+        .iter()
+        .filter(|m| *m.registers.get(&Z) == 0)
+        .map(|m| {
+            m.input
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("")
+                .parse()
+                .unwrap()
+        })
+        .min()
+        .unwrap()
+
+    // 73181221197111
+}
+
+pub fn vec_to_num(v: &[u8]) -> usize {
+    v.iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<String>>()
+        .join("")
+        .parse()
+        .unwrap()
+}
 #[cfg(test)]
 mod tests {
     use super::*;
